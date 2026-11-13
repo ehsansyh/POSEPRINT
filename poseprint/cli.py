@@ -59,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=["pdf", "png", "svg", "eps"],
                    help="the file type for --diagram, pdf by default so it stays sharp "
                         "at any size in a manuscript")
+    p.add_argument("--log", nargs="?", const=".", default=None, metavar="DIR",
+                   help="also write the report for each complex into DIR, as the text "
+                        "POSEPRINT writes and as a CSV of one row per contact")
     p.add_argument("--quiet", "-q", action="store_true", help="no progress output")
     p.add_argument("--version", action="version", version="POSEPRINT %s" % __version__)
     return p
@@ -109,6 +112,17 @@ def main(argv=None) -> int:
             except Exception as exc:
                 print("    the diagram could not be drawn, %s: %s"
                       % (type(exc).__name__, exc), file=sys.stderr)
+
+        if args.log is not None:
+            target = Path(args.log)
+            target.mkdir(parents=True, exist_ok=True)
+            for res in results:
+                stem = "%s_%s" % (path.stem, res.ligand)
+                (target / (stem + ".log")).write_text(res.log, encoding="utf-8")
+                res.log_table().to_csv(target / (stem + "_interactions.csv"),
+                                       index=False)
+            if not args.quiet:
+                print("    reports -> %s" % target, file=sys.stderr)
 
         for res in results:
             if args.full:

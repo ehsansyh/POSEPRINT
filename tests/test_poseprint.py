@@ -104,3 +104,27 @@ def test_residue_classes_cover_the_twenty():
               "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"]
     assert sorted(RESIDUE_CLASS) == sorted(twenty)
     assert residue_class("HOH") == "other"
+
+
+def test_the_report_is_captured(result):
+    assert "Hydrogen bond interaction" in result.log
+    assert "Hydrophobic interactions between" in result.log
+
+
+def test_the_report_parses_into_one_row_per_contact(result):
+    frame = result.log_table()
+    assert len(frame) == 8, frame
+    kinds = frame["interaction"].value_counts().to_dict()
+    assert kinds == {"Hydrophobic": 6, "Hydrogen bond": 2}
+    hbonds = frame[frame["interaction"] == "Hydrogen bond"]
+    assert set(hbonds["atoms"]) == {"N, H, O5", "N3, H35, OD2"}
+    assert hbonds["distance"].tolist() == [3.04, 2.08]
+    assert hbonds["angle"].tolist() == [156.64, 152.24]
+
+
+def test_the_report_table_agrees_with_the_counts(result):
+    frame = result.log_table()
+    counts = result.counts()
+    assert (frame["interaction"] == "Hydrogen bond").sum() == counts["H-bonds"]
+    assert ((frame["interaction"] == "Hydrophobic").sum()
+            == counts["Hydrophobic interaction"])

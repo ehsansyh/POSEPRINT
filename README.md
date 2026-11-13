@@ -90,6 +90,40 @@ poseprint "poses/*.pdb" -o results/                # one CSV per pose
 
 ---
 
+## The report, one row per contact
+
+The per-residue table counts contacts. The report says what each one is, which atoms
+made it and how far apart they are.
+
+```python
+from poseprint import analyse
+
+result = analyse("complex.pdb")[0]
+print(result.log)              # the report as POSEPRINT writes it
+result.log_table()             # the same thing as a table
+```
+
+```
+   interaction partner 1 partner 2        atoms  distance  angle
+ Hydrogen bond    ASP 30   UNK 900     N, H, O5      3.04 156.64
+ Hydrogen bond   UNK 900    ASP 25 N3, H35, OD2      2.08 152.24
+   Hydrophobic   UNK 900    ILE 54          NaN      3.60    NaN
+   Hydrophobic   UNK 900    ILE 47          NaN      3.29    NaN
+```
+
+```bash
+poseprint complex.pdb --log reports/     # the text report and the CSV, per ligand
+```
+
+In the browser the same table appears under **Detected interactions**, with a button to
+take it as CSV and another to take the report as written.
+
+Hydrogen bonds, water bridges and halogen bonds name the atoms that made the contact.
+Hydrophobic contacts, salt bridges and the aromatic interactions are reported per residue,
+so their atom column is empty.
+
+---
+
 ## A figure for the manuscript
 
 ![Darunavir in wild-type HIV-1 protease](examples/figure/darunavir_interactions.png)

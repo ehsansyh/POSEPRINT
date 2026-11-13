@@ -12,6 +12,7 @@ two analyses running at the same time could overwrite each other's intermediates
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -38,6 +39,13 @@ INTERACTION_COLUMNS = [
 ]
 
 
+# every line of the report has the same shape, a label, the partners, then the
+# measurements, and sometimes the atoms that made the contact
+LOG_LINE = re.compile(
+    r"^(?P<label>.+?) between (?P<partners>.+?): (?P<fields>.+?)"
+    r"(?: --> Interaction between atoms (?P<atoms>\(.*\)))?\s*$")
+
+
 @dataclass
 class InteractionResult:
     """Everything POSEPRINT found for one ligand in one complex."""
@@ -45,6 +53,7 @@ class InteractionResult:
     pose: str
     ligand: str
     table: pd.DataFrame = field(repr=False)
+    log: str = field(default="", repr=False)
 
     def _ligand_mask(self):
         label = "%s %s" % (self.ligand[:3], self.ligand[3:])
@@ -95,6 +104,68 @@ class InteractionResult:
         keep["Residues"] = keep["Residues"].astype(str).str.strip()
         return keep.drop_duplicates(subset="Residues").reset_index(drop=True)
 
+    def log_table(self) -> pd.DataFrame:
+        """The report, one row per contact instead of one block of text.
+
+        The per-residue table says how many contacts a residue makes. This says what
+        each one is, which atoms made it and how far apart they are, which is what the
+        report file carries and what a reader usually wants to quote.
+        """
+        rows = []
+        for raw in self.log.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("=") or line.endswith(":"):
+                continue
+            match = LOG_LINE.match(line)
+            if not match:
+                continue
+            label = match.group("label").strip()
+            label = re.sub(r"\s+interactions?$", "", label, flags=re.I).strip()
+            partners = [p.strip() for p in match.group("partners").split(" and ")]
+            # a water bridge names the bridging water in the first partner
+            water = ""
+            if partners and "," in partners[0]:
+                head, _, tail = partners[0].partition(",")
+                partners[0] = head.strip()
+                water = tail.strip()
+            row = {"interaction": label,
+                   "partner 1": partners[0] if partners else "",
+                   "partner 2": partners[1] if len(partners) > 1 else "",
+                   "water": water}
+            extra = []
+            for piece in match.group("fields").split(","):
+                if "=" not in piece:
+                    continue
+                key, _, value = piece.partition("=")
+                key, value = key.strip(), value.strip()
+                try:
+                    number = round(float(value), 2)
+                except ValueError:
+                    extra.append("%s = %s" % (key, value))
+                    continue
+                if "distance" in key.lower():
+                    row.setdefault("distance", number)
+                elif "angle" in key.lower():
+                    row.setdefault("angle", number)
+                else:
+                    extra.append("%s = %s" % (key, number))
+            atoms = match.group("atoms")
+            if atoms:
+                row["atoms"] = ", ".join(
+                    a.strip().strip("'\"") for a in atoms.strip("()").split(",")
+                    if a.strip())
+            row["other"] = "; ".join(extra)
+            rows.append(row)
+        columns = ["interaction", "partner 1", "partner 2", "water", "atoms",
+                   "distance", "angle", "other"]
+        frame = pd.DataFrame(rows)
+        for col in columns:
+            if col not in frame.columns:
+                frame[col] = None
+        frame = frame[columns]
+        return frame.loc[:, [c for c in columns
+                             if frame[c].notna().any() and (frame[c] != "").any()]]
+
     def to_csv(self, path) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,13 +193,15 @@ def _as_pairs(complex_pdb, mol2, scratch):
     return work, pdb_local.name, mol2_local.name
 
 
-def analyse(complex_pdb, mol2=None, save_dir=None, scratch=None, verbose=False):
+def analyse(complex_pdb, mol2=None, save_dir=None, scratch=None, verbose=False,
+            capture_log=True):
     """Detect every interaction type in one complex.
 
     complex_pdb  a docked complex, protein and ligand in one file, with hydrogens
     mol2         the same complex in MOL2, built with Open Babel if left out
     save_dir     write the original per-ligand log and CSV here as well
     scratch      where intermediates go, a fresh temporary directory by default
+    capture_log  read the report back onto each result, see InteractionResult.log
 
     Returns a list of InteractionResult, one for each ligand found in the file.
     """
@@ -136,10 +209,23 @@ def analyse(complex_pdb, mol2=None, save_dir=None, scratch=None, verbose=False):
     scratch = Path(tempfile.mkdtemp(prefix="poseprint_")) if owned else Path(scratch)
     try:
         work, pdb_name, mol2_name = _as_pairs(complex_pdb, mol2, scratch)
+        reports = Path(save_dir) if save_dir else (scratch / "report")
+        if save_dir or capture_log:
+            reports.mkdir(parents=True, exist_ok=True)
         rows = analysis.run_analyze([pdb_name], [mol2_name], str(work),
-                                    save_dir=str(save_dir) if save_dir else None,
+                                    save_dir=str(reports) if (save_dir or capture_log)
+                                    else None,
                                     scratch=str(scratch / "tmp"), verbose=verbose)
-        return [InteractionResult(r["pose"], r["ligand"], r["table"]) for r in rows]
+        out = []
+        for r in rows:
+            text = ""
+            if capture_log:
+                stem = r["pose"].split(".pdb")[0]
+                report = reports / ("results_%s_%s.log" % (stem, r["ligand"]))
+                if report.is_file():
+                    text = report.read_text(encoding="utf-8", errors="replace")
+            out.append(InteractionResult(r["pose"], r["ligand"], r["table"], text))
+        return out
     finally:
         if owned:
             shutil.rmtree(scratch, ignore_errors=True)

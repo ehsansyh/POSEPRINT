@@ -86,6 +86,7 @@ def _run(pdb_bytes: bytes, name: str, mol2_bytes=None, mol2_name=None):
     for res in analyse(pdb, mol2=mol2, verbose=False):
         out.append({"ligand": res.ligand, "counts": res.counts(),
                     "table": res.table, "contacts": res.contact_table(),
+                    "log": res.log, "log_table": res.log_table(),
                     "residues": {c: res.residues(c) for c in INTERACTION_COLUMNS}})
     return out, pdb.read_text(encoding="utf-8", errors="replace")
 
@@ -220,13 +221,35 @@ def panel_single():
                    "manuscript. The SVG opens in Illustrator or Inkscape if a label "
                    "needs moving.")
 
+    stem = "poseprint_%s_%s" % (Path(pdb_name).stem, chosen)
+
+    st.subheader("Detected interactions")
+    st.caption("The report POSEPRINT writes, one row per contact. The per-residue table "
+               "below counts them, this says what each one is, which atoms made it and "
+               "how far apart they are.")
+    detail = res["log_table"]
+    if detail.empty:
+        st.info("The report lists no contact for this ligand.")
+    else:
+        st.dataframe(detail, use_container_width=True, hide_index=True)
+    c1, c2 = st.columns(2)
+    c1.download_button("Interactions as CSV",
+                       detail.to_csv(index=False).encode("utf-8"),
+                       file_name=stem + "_interactions.csv", mime="text/csv",
+                       use_container_width=True, disabled=detail.empty)
+    c2.download_button("The report as written",
+                       (res["log"] or "").encode("utf-8"),
+                       file_name=stem + ".log", mime="text/plain",
+                       use_container_width=True, disabled=not res["log"])
+    with st.expander("Read the report as text"):
+        st.code(res["log"] or "the report is empty", language="text")
+
     st.subheader("Residues in contact")
-    table = res["contacts"]
-    st.dataframe(table, use_container_width=True, hide_index=True)
-    st.download_button("Download the full table as CSV",
+    st.caption("One row per residue, counting the contacts it makes of each type.")
+    st.dataframe(res["contacts"], use_container_width=True, hide_index=True)
+    st.download_button("The per-residue table as CSV",
                        res["table"].to_csv(index=False).encode("utf-8"),
-                       file_name="poseprint_%s_%s.csv" % (Path(pdb_name).stem, chosen),
-                       mime="text/csv")
+                       file_name=stem + "_residues.csv", mime="text/csv")
 
 
 def panel_batch():

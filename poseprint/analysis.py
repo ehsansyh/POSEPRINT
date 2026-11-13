@@ -298,7 +298,7 @@ def run_analyze(pdb_files, mol2_files, dirctf, save_dir=None, scratch=None,
                         for interaction_type, atoms in halogen.items():
                             ligand_residue,ligand_id1, protein_residue, protein_id = interaction_type
                             for ad in atoms: 
-                                result.write(f"Halogen bond interaction between {ligand_residue} {ligand_id1} and {protein_residue} {protein_id}: Distance = {ad[0][1],2}, Angle = {ad[0][2],2}")
+                                result.write(f"Halogen bond interaction between {ligand_residue} {ligand_id1} and {protein_residue} {protein_id}: Distance = {round(ad[0][1], 2)}, Angle = {round(ad[0][2], 2)}\n")
                     
                     model_Data = model_Data.astype({col: 'float' if col != 'Residues' else 'object' for col in model_Data.columns})
                     results.append({"pose": pdb, "ligand": ligand_id,
