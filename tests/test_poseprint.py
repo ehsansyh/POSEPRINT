@@ -74,3 +74,33 @@ def test_fingerprint_matches_the_tables(result):
 def test_a_missing_file_is_reported_clearly():
     with pytest.raises(FileNotFoundError):
         analyse("no_such_complex.pdb")
+
+
+def test_the_diagram_names_the_ligand_atoms_it_bonds_to():
+    """The dashed lines are only meaningful if the detector names a ligand atom."""
+    from poseprint.diagram import interaction_records
+    found = interaction_records(EXAMPLE)
+    assert found, "the example carries a ligand"
+    hbonds = [r for r in found[0]["records"] if r["type"] == "hydrogen bond"]
+    assert len(hbonds) == 2
+    assert {r["resname"] for r in hbonds} == {"ASP"}
+    assert all(r["ligand_atom"] for r in hbonds), "each one points at a ligand atom"
+    assert all(r["distance"] and 1.5 < r["distance"] < 4.0 for r in hbonds)
+
+
+def test_the_diagram_renders_and_saves(tmp_path):
+    import matplotlib.pyplot as plt
+
+    from poseprint import draw_diagram
+    out = tmp_path / "diagram.pdf"
+    figure = draw_diagram(EXAMPLE, out=out, title="test")
+    plt.close(figure)
+    assert out.is_file() and out.stat().st_size > 5000
+
+
+def test_residue_classes_cover_the_twenty():
+    from poseprint.diagram import RESIDUE_CLASS, residue_class
+    twenty = ["ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+              "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"]
+    assert sorted(RESIDUE_CLASS) == sorted(twenty)
+    assert residue_class("HOH") == "other"

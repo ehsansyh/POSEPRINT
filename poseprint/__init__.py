@@ -14,6 +14,8 @@ it is specific to that target.
     for fp in fingerprint("complex.pdb"):
         print(fp["hbond_count"], fp["hbond_residues"])
 
+    draw_diagram("complex.pdb", out="interactions.pdf")
+
 The complex has to carry hydrogens. Hydrogen bonds are found through the donor hydrogen,
 so a heavy-atom-only file returns nothing rather than failing.
 """
@@ -29,6 +31,7 @@ from .core import (
     fingerprint,
 )
 from .convert import have_openbabel, pdb_to_mol2
+from .diagram import draw_diagram, interaction_records
 
 __all__ = [
     "__version__",
@@ -39,4 +42,6 @@ __all__ = [
     "INTERACTION_COLUMNS",
     "pdb_to_mol2",
     "have_openbabel",
+    "draw_diagram",
+    "interaction_records",
 ]

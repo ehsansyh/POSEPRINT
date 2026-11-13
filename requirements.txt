@@ -4,6 +4,7 @@ rdkit>=2022.9
 numpy>=1.23
 pandas>=1.5
 networkx>=2.8
+matplotlib>=3.5
 
 # the browser interface
 streamlit>=1.30

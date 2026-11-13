@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 warnings.filterwarnings("ignore")
 
 from poseprint import INTERACTION_COLUMNS, __version__, analyse, have_openbabel  # noqa: E402
+from poseprint.diagram import draw_diagram, interaction_records  # noqa: E402
 
 HB = "#08519C"
 HY = "#6BAED6"
@@ -49,6 +50,26 @@ def _store(upload) -> Path:
     target = tmp / upload.name
     target.write_bytes(upload.getbuffer())
     return target
+
+
+@st.cache_data(show_spinner=False)
+def _diagram(pdb_bytes: bytes, name: str, title: str, show_distances: bool):
+    """Render the diagram once per complex and hand back the three file formats."""
+    import io as _io
+
+    import matplotlib.pyplot as plt
+    tmp = Path(tempfile.mkdtemp(prefix="poseprint_dia_"))
+    pdb = tmp / name
+    pdb.write_bytes(pdb_bytes)
+    fig = draw_diagram(pdb, title=title or None, show_distances=show_distances)
+    files = {}
+    for fmt in ("png", "pdf", "svg"):
+        buffer = _io.BytesIO()
+        fig.savefig(buffer, format=fmt, dpi=600, facecolor="white",
+                    bbox_inches="tight", pad_inches=0.04)
+        files[fmt] = buffer.getvalue()
+    plt.close(fig)
+    return files
 
 
 @st.cache_data(show_spinner=False)
@@ -168,6 +189,36 @@ def panel_single():
         cols = st.columns(min(len(counts), 5))
         for (name, value), col in zip(counts.items(), cols * 5):
             col.metric(name.replace("_", " "), value)
+
+    st.subheader("Interaction diagram")
+    st.caption("The ligand with the residues it touches. Dashed lines run to the "
+               "ligand atom the interaction is made with. A spoked arc is a hydrophobic "
+               "contact, which the detector reports per residue rather than per atom, "
+               "so it faces the nearest ligand atom. Residues are coloured by class.")
+    opt_left, opt_right = st.columns([2, 1])
+    with opt_left:
+        diagram_title = st.text_input("Caption drawn on the figure, leave empty for none",
+                                      value=Path(pdb_name).stem)
+    with opt_right:
+        with_distances = st.checkbox("Mark the distances", value=True)
+    try:
+        files = _diagram(bytes(pdb_bytes), pdb_name, diagram_title, with_distances)
+    except Exception as exc:
+        st.error("The diagram could not be drawn. %s: %s" % (type(exc).__name__, exc))
+    else:
+        st.image(files["png"], use_container_width=True)
+        stem = "poseprint_%s_%s" % (Path(pdb_name).stem, chosen)
+        d1, d2, d3 = st.columns(3)
+        d1.download_button("PDF for the manuscript", files["pdf"],
+                           file_name=stem + ".pdf", mime="application/pdf",
+                           use_container_width=True)
+        d2.download_button("SVG to edit", files["svg"], file_name=stem + ".svg",
+                           mime="image/svg+xml", use_container_width=True)
+        d3.download_button("PNG", files["png"], file_name=stem + ".png",
+                           mime="image/png", use_container_width=True)
+        st.caption("The PDF and the SVG are vector, so they stay sharp at any size in a "
+                   "manuscript. The SVG opens in Illustrator or Inkscape if a label "
+                   "needs moving.")
 
     st.subheader("Residues in contact")
     table = res["contacts"]

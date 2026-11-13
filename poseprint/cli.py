@@ -51,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="write the whole per-residue table instead of the summary")
     p.add_argument("--all-residues", action="store_true",
                    help="with --full, keep residues that make no contact at all")
+    p.add_argument("--diagram", "-d", nargs="?", const=".", default=None,
+                   metavar="DIR",
+                   help="also draw the two-dimensional interaction diagram into DIR, "
+                        "or the working directory when DIR is left out")
+    p.add_argument("--diagram-format", default="pdf",
+                   choices=["pdf", "png", "svg", "eps"],
+                   help="the file type for --diagram, pdf by default so it stays sharp "
+                        "at any size in a manuscript")
     p.add_argument("--quiet", "-q", action="store_true", help="no progress output")
     p.add_argument("--version", action="version", version="POSEPRINT %s" % __version__)
     return p
@@ -85,6 +93,23 @@ def main(argv=None) -> int:
         if not results:
             print("    no ligand found in %s" % path.name, file=sys.stderr)
             continue
+        if args.diagram is not None:
+            target = Path(args.diagram)
+            target.mkdir(parents=True, exist_ok=True)
+            try:
+                from .diagram import draw_diagram
+                import matplotlib.pyplot as plt
+                figure_path = target / ("%s_interactions.%s"
+                                        % (path.stem, args.diagram_format))
+                fig = draw_diagram(path, out=figure_path, mol2=args.mol2,
+                                   title=path.stem)
+                plt.close(fig)
+                if not args.quiet:
+                    print("    diagram -> %s" % figure_path, file=sys.stderr)
+            except Exception as exc:
+                print("    the diagram could not be drawn, %s: %s"
+                      % (type(exc).__name__, exc), file=sys.stderr)
+
         for res in results:
             if args.full:
                 frame = res.table if args.all_residues else res.contact_table()

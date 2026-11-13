@@ -90,14 +90,48 @@ poseprint "poses/*.pdb" -o results/                # one CSV per pose
 
 ---
 
+## A figure for the manuscript
+
+```python
+from poseprint import draw_diagram
+
+draw_diagram("complex.pdb", out="interactions.pdf",
+             title="Darunavir in wild-type HIV-1 protease")
+```
+
+```bash
+poseprint complex.pdb --diagram figures/            # PDF by default
+poseprint "poses/*.pdb" --diagram figures/ --diagram-format svg
+```
+
+The ligand is drawn as a structure and the residues that touch it sit around it, each one
+labelled in the usual way, `Asp25`, `Ile84`, and coloured by class. Every interaction
+that names a ligand atom is drawn as a dashed line straight to that atom with the
+distance on it. Hydrophobic contacts carry no atom in the detector output, so they are
+drawn the way LigPlot draws them, as a spoked arc facing the nearest ligand atom.
+
+| Colour | Residue class |
+| --- | --- |
+| green | nonpolar, Ala Val Leu Ile Pro Met Phe Trp Gly |
+| blue | polar, Ser Thr Cys Asn Gln Tyr |
+| red | acidic, Asp Glu |
+| purple | basic, Lys Arg His |
+
+PDF and SVG come out vector, so the figure stays sharp at any size in a manuscript and a
+label can still be nudged in Illustrator or Inkscape. The browser interface offers the
+same three formats as download buttons.
+
+---
+
 ## Use it in the browser
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-Drop in a complex and the page reports the contacts, draws the structure with the
-contacting residues coloured by interaction type, and offers the table as a CSV. A second
+Drop in a complex and the page reports the contacts, draws the structure in three
+dimensions with the contacting residues coloured by interaction type, renders the
+interaction diagram, and offers the table as a CSV and the figure as PDF, SVG or PNG. A second
 tab takes a batch of poses and returns one row each.
 
 ---
