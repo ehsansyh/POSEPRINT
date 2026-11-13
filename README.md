@@ -92,6 +92,8 @@ poseprint "poses/*.pdb" -o results/                # one CSV per pose
 
 ## A figure for the manuscript
 
+![Darunavir in wild-type HIV-1 protease](examples/figure/darunavir_interactions.png)
+
 ```python
 from poseprint import draw_diagram
 
