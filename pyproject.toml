@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poseprint"
+version = "1.0.0"
+description = "Protein-ligand interaction fingerprints from docked poses"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Ehsan Sayyah" }]
+keywords = [
+    "structural biology",
+    "molecular docking",
+    "protein-ligand interactions",
+    "interaction fingerprint",
+    "cheminformatics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dependencies = [
+    "biopython>=1.80",
+    "MDAnalysis>=2.4",
+    "rdkit>=2022.9",
+    "numpy>=1.23",
+    "pandas>=1.5",
+    "networkx>=2.8",
+]
+
+[project.optional-dependencies]
+app = ["streamlit>=1.30", "py3Dmol>=2.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+poseprint = "poseprint.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["poseprint*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
