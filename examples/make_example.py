@@ -43,10 +43,14 @@ def convert(src: Path, dst: Path) -> dict:
     ncol = len(props) + 1
     idx = {name: props.index(name) + 1 for name in props}
 
-    lines, serial = [], 0
     used = collections.defaultdict(set)      # per residue, the names already taken
     counter = collections.defaultdict(int)   # per residue and element, a running index
-    chains, residues, renamed = set(), set(), 0
+    chains, renamed = set(), 0
+    # grouped by residue, in the order each residue is first seen, because a PDB parser
+    # treats a residue that reappears after others as a duplicate and throws it away.
+    # Maestro often writes a ligand's heavy atoms first and its hydrogens at the end of
+    # the file, which silently costs every one of those hydrogens.
+    grouped = collections.OrderedDict()
 
     for k in range(0, len(tok) - ncol + 1, ncol):
         row = tok[k:k + ncol]
@@ -68,18 +72,24 @@ def convert(src: Path, dst: Path) -> dict:
                 renamed += 1
             name = cand
         used[key].add(name)
-
-        serial += 1
-        rec = "HETATM" if resn == "UNK" else "ATOM  "
-        lines.append("%-6s%5d %-4s %3s %1s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s"
-                     % (rec, serial % 100000, name, resn, chain, resi,
-                        float(row[idx["r_m_x_coord"]]), float(row[idx["r_m_y_coord"]]),
-                        float(row[idx["r_m_z_coord"]]), 1.00, 0.00, el.rjust(2)))
+        grouped.setdefault(key, []).append(
+            (name, el, float(row[idx["r_m_x_coord"]]),
+             float(row[idx["r_m_y_coord"]]), float(row[idx["r_m_z_coord"]])))
         chains.add(chain)
-        residues.add(key)
+
+    lines, serial = [], 0
+    for (chain, resi, resn), atoms in grouped.items():
+        rec = "HETATM" if resn == "UNK" else "ATOM  "
+        for name, el, x, y, z in atoms:
+            serial += 1
+            lines.append(
+                "%-6s%5d %-4s %3s %1s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s"
+                % (rec, serial % 100000, name, resn, chain, resi, x, y, z,
+                   1.00, 0.00, el.rjust(2)))
 
     lines.append("END")
     dst.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    residues = set(grouped)
     return {"atoms": serial, "chains": sorted(chains), "residues": len(residues),
             "renamed": renamed}
 
